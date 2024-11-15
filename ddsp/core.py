@@ -3,12 +3,16 @@ import torch.nn as nn
 import torch.fft as fft
 import numpy as np
 import librosa as li
-import crepe
+import torchcrepe
 import math
 
 
-def safe_log(x):
-    return torch.log(x + 1e-7)
+def safe_log(x, eps=1e-7):
+
+    if(type(x) == torch.Tensor):
+        return torch.log(x + eps)
+
+    return np.log(x + eps)
 
 
 @torch.no_grad()
@@ -74,7 +78,7 @@ def remove_above_nyquist(amplitudes, pitch, sampling_rate):
 
 
 def scale_function(x):
-    return 2 * torch.sigmoid(x)**(math.log(10)) + 1e-7
+    return 2 * torch.sigmoid(x) ** (math.log(10)) + 1e-7
 
 
 def extract_loudness(signal, sampling_rate, block_size, n_fft=2048):
@@ -85,28 +89,30 @@ def extract_loudness(signal, sampling_rate, block_size, n_fft=2048):
         win_length=n_fft,
         center=True,
     )
-    S = np.log(abs(S) + 1e-7)
-    f = li.fft_frequencies(sampling_rate, n_fft)
+    S = safe_log(abs(S))
+    f = li.fft_frequencies(sr=sampling_rate, n_fft=n_fft)
     a_weight = li.A_weighting(f)
 
     S = S + a_weight.reshape(-1, 1)
-
     S = np.mean(S, 0)[..., :-1]
 
     return S
 
-
-def extract_pitch(signal, sampling_rate, block_size):
+def extract_pitch(signal, sampling_rate, block_size, n_fft=2048, device="cpu"):
     length = signal.shape[-1] // block_size
-    f0 = crepe.predict(
-        signal,
+
+    f0 = torchcrepe.predict(
+        torch.from_numpy(signal).reshape(1, -1),
         sampling_rate,
-        step_size=int(1000 * block_size / sampling_rate),
-        verbose=1,
-        center=True,
-        viterbi=True,
+        hop_length=block_size,
+        fmin=30,
+        fmax=800,
+        model="full",
+        batch_size=n_fft,
+        device=device,
     )
-    f0 = f0[1].reshape(-1)[:-1]
+
+    f0 = f0[0, :-1].cpu().numpy()  # type: ignore
 
     if f0.shape[-1] != length:
         f0 = np.interp(
@@ -116,7 +122,6 @@ def extract_pitch(signal, sampling_rate, block_size):
         )
 
     return f0
-
 
 def mlp(in_size, hidden_size, n_layers):
     channels = [in_size] + (n_layers) * [hidden_size]
@@ -163,6 +168,6 @@ def fft_convolve(signal, kernel):
     kernel = nn.functional.pad(kernel, (kernel.shape[-1], 0))
 
     output = fft.irfft(fft.rfft(signal) * fft.rfft(kernel))
-    output = output[..., output.shape[-1] // 2:]
+    output = output[..., output.shape[-1] // 2 :]
 
     return output

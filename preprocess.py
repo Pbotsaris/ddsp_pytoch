@@ -10,24 +10,27 @@ from os import makedirs, path
 import torch
 from scipy.io import wavfile
 
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 def get_files(data_location, extension, **kwargs):
+    if not path.exists(data_location):
+        raise FileNotFoundError(f"Failed to preprocess: {data_location} not found.")
+
     return list(pathlib.Path(data_location).rglob(f"*.{extension}"))
 
-
-def preprocess(f, sampling_rate, block_size, signal_length, oneshot, **kwargs):
-    x, sr = li.load(f, sampling_rate)
+def preprocess(f, sampling_rate, block_size, signal_length, n_fft, oneshot, **kwargs):
+    x, _ = li.load(f, sr=sampling_rate)
     N = (signal_length - len(x) % signal_length) % signal_length
     x = np.pad(x, (0, N))
 
     if oneshot:
         x = x[..., :signal_length]
 
-    pitch = extract_pitch(x, sampling_rate, block_size)
-    loudness = extract_loudness(x, sampling_rate, block_size)
+    pitch = extract_pitch(x, sampling_rate, block_size, n_fft, str(device))
+    loudness = extract_loudness(x, sampling_rate, block_size, n_fft)
 
     x = x.reshape(-1, signal_length)
-    pitch = pitch.reshape(x.shape[0], -1)
+    pitch = pitch.reshape(x.shape[0], -1) # type: ignore
     loudness = loudness.reshape(x.shape[0], -1)
 
     return x, pitch, loudness
@@ -83,6 +86,8 @@ def main():
     np.save(path.join(out_dir, "pitchs.npy"), pitchs)
     np.save(path.join(out_dir, "loudness.npy"), loudness)
 
-
 if __name__ == "__main__":
-    main()
+    #try:
+      main()
+   # except Exception as e:
+    #    print(e)

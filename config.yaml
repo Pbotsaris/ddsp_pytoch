@@ -1,13 +1,15 @@
+---
 data:
-  data_location: /slow-2/georges/dataset-urmp-wav
+  data_location: data/
   extension: "wav"
 
 preprocess:
   sampling_rate: &samplingrate 16000
+  block_size: &blocksize 160  # must be a power of 2 if using realtime
   signal_length: &signallength 64000
-  block_size: &blocksize 160 # must be a power of 2 if using realtime
+  n_fft: 2048
 
-  oneshot: false # crop every audio file to exactly signal length
+  oneshot: false  # crop every audio file to exactly signal length
   out_dir: ./preprocessed/
 
 model:
