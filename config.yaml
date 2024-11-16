@@ -1,12 +1,12 @@
 ---
 data:
-  data_location: data/
+  data_location: /home/pedro/datasets/sub37
   extension: "wav"
 
 preprocess:
-  sampling_rate: &samplingrate 16000
-  block_size: &blocksize 160  # must be a power of 2 if using realtime
-  signal_length: &signallength 64000
+  sampling_rate: &samplingrate 44100
+  block_size: &blocksize 264  # must be a power of 2 if using realtime
+  signal_length: &signallength 65536  # 2 ** 16
   n_fft: 2048
 
   oneshot: false  # crop every audio file to exactly signal length
@@ -22,6 +22,3 @@ model:
 train:
   scales: [4096, 2048, 1024, 512, 256, 128]
   overlap: .75
-  start_lr: 1e-3
-  stop_lr: 1e-5
-  decay_over: 10000

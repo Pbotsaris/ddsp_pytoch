@@ -32,6 +32,8 @@ def preprocess(f, sampling_rate, block_size, signal_length, n_fft, oneshot, **kw
     pitch = pitch.reshape(x.shape[0], -1) # type: ignore
     loudness = loudness.reshape(x.shape[0], -1)
 
+    print("shape of x:", x.shape)
+
     return x, pitch, loudness
 
 
@@ -57,6 +59,7 @@ def main():
         CONFIG = "config.yaml"
 
     args.parse_args()
+
     with open(args.CONFIG, "r") as config:
         config = yaml.safe_load(config)
 
@@ -84,6 +87,7 @@ def main():
     np.save(path.join(out_dir, "signals.npy"), signals)
     np.save(path.join(out_dir, "pitchs.npy"), pitchs)
     np.save(path.join(out_dir, "loudness.npy"), loudness)
+
 
 if __name__ == "__main__":
     #try:

@@ -1,12 +1,13 @@
 import torch
-from torch.utils.tensorboard.writer import SummaryWriter
 import yaml
 from ddsp.model import DDSP
 from effortless_config import Config
 from os import path
+import os
 from preprocess import Dataset
 from ddsp.core import  mean_std_loudness
 from ddsp.trainer import Trainer
+from ddsp.utils import verify_adjust_stop_lr
 
 class args(Config):
     CONFIG = "config.yaml"
@@ -14,7 +15,7 @@ class args(Config):
     ROOT = "runs"
     STEPS = 500000
     BATCH = 16
-    START_LR = 1e-3
+    LR = 1e-3
     STOP_LR = 1e-4
     DECAY_OVER = 400000
 
@@ -28,17 +29,19 @@ model      = DDSP(**config["model"])
 dataset    = Dataset(config["preprocess"]["out_dir"])
 dataloader = torch.utils.data.DataLoader(dataset, args.BATCH, True, drop_last=True)
 mean_loudness, std_loudness = mean_std_loudness(dataloader)
+args.STOP_LR = verify_adjust_stop_lr(args.LR, args.STOP_LR)
 
 config["data"]["mean_loudness"] = mean_loudness
 config["data"]["std_loudness"] = std_loudness
+
+if not path.exists(path.join(args.ROOT, args.NAME)):
+    os.makedirs(path.join(args.ROOT, args.NAME), exist_ok=True)
 
 with open(path.join(args.ROOT, args.NAME, "config.yaml"), "w") as out_config:
     yaml.safe_dump(config, out_config)
 
 trainer = Trainer(dataloader, model, config, args, device)
 trainer.train()
-
-
 
 #opt = torch.optim.Adam(model.parameters(), lr=args.START_LR)
 #

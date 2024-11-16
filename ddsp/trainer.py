@@ -2,10 +2,8 @@ import torch
 from torch.utils.tensorboard.writer import SummaryWriter
 from ddsp.model import DDSP
 from os import path
+from ddsp.core import multiscale_fft, safe_log
 from tqdm import tqdm
-from core import multiscale_fft, safe_log
-import soundfile as sf
-from ddsp.utils import get_scheduler
 from torch.optim.lr_scheduler import ExponentialLR
 import numpy as np
 
@@ -32,35 +30,25 @@ class Trainer:
         self.n_element = 0
         self.step = 0
         self.epochs = int(np.ceil(args.STEPS / len(dataloader)))
-        self.opt = torch.optim.Adam(model.parameters(), lr=args.START_LR)
-
-        self.schedule = get_scheduler(
-            len(dataloader),
-            args.START_LR,
-            args.STOP_LR,
-            args.DECAY_OVER,
-        )
+        self.opt = torch.optim.Adam(model.parameters(), lr=args.LR)
 
         total_steps = args.DECAY_OVER / len(dataloader)
-        gamma = (args.STOP_LR / args.START_LR) ** (1 / total_steps)
-
+        gamma = (args.STOP_LR / args.LR) ** (1 / total_steps)
         self.lr_scheduler = ExponentialLR(self.opt, gamma=gamma)
 
-    def train(self):
+    def train(self) -> None:
         for epoch in tqdm(range(self.epochs)):
-            epoch_loss = 0
             last_signal = None
             last_y = None
 
             for signal, pitch, loudness in self.dataloader:
-                signal = signal.to(self.device)
-                pitch = pitch.unsqueeze(-1).to(self.device)
-                loudness = loudness.unsqueeze(-1).to(self.device)
+                signal   =  signal.to(self.device)
+                pitch    =  pitch.unsqueeze(-1).to(self.device)
+                loudness =  loudness.unsqueeze(-1).to(self.device)
+                loudness =  (loudness - self.mean_loudness) / self.std_loudness
+                y        =  self.model(pitch, loudness).squeeze(-1)
+                loss     =  self.spectrogram_loss(signal, y)
 
-                loudness = (loudness - self.mean_loudness) / self.std_loudness
-                y = self.model(pitch, loudness).squeeze(-1)
-
-                loss = self.spectrogram_loss(signal, y)
                 self.opt.zero_grad()
                 loss.backward()
                 self.opt.step()
@@ -71,21 +59,23 @@ class Trainer:
                 self.n_element += 1
                 self.mean_loss += (loss.item() - self.mean_loss) / self.n_element
 
-                epoch_loss += loss.item()
                 last_signal = signal
                 last_y = y
 
-                if self.step % 100 == 0:
-                    self.writer.add_scalar("epoch_loss", epoch_loss, self.step)
-
             if not epoch % 10:
                 self.evaluate_epoch(epoch)
+
+                if last_signal is not None and last_y is not None:
+                    self.evaluate_audio(last_signal, last_y)
+
+                if self.mean_loss < self.best_loss:
+                        self.best_loss = self.mean_loss
+
                 self.mean_loss = 0
                 self.n_element = 0
 
-                self.evaluate_audio(last_signal, last_y, epoch)
 
-    def spectrogram_loss(self, x, y):
+    def spectrogram_loss(self, x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
         scales = self.config["train"]["scales"]
         overlap = self.config["train"]["overlap"]
 
@@ -101,23 +91,28 @@ class Trainer:
 
         return loss
 
-    def evaluate_epoch(self, epoch):
+    def evaluate_epoch(self, epoch: int) -> None:
+        current_lr = self.opt.param_groups[0]['lr']
+
         self.writer.add_scalar("mean_loss", self.mean_loss, epoch)
-        self.writer.add_scalar("lr", self.schedule(epoch), epoch)
+        self.writer.add_scalar("lr", current_lr, epoch)
         self.writer.add_scalar("reverb_decay", self.model.reverb.decay.item(), epoch)
         self.writer.add_scalar("reverb_wet", self.model.reverb.wet.item(), epoch)
 
         if self.mean_loss < self.best_loss:
             torch.save( self.model.state_dict(), path.join(self.path, "state.pth"))
-            self.best_loss = self.mean_loss
 
-    def evaluate_audio(self, x, y, epoch):
+    def evaluate_audio(self, x: torch.Tensor, y: torch.Tensor) -> None:
         sr = self.config["preprocess"]["sampling_rate"]
         x_audio = x.reshape(-1).detach().cpu()
         y_audio = y.reshape(-1).detach().cpu()
 
-        self.writer.add_audio( f"Real at Epoch: {epoch}, ", x_audio, self.step, sample_rate=sr)
-        self.writer.add_audio( f"Fake at Epoch: {epoch} ", y_audio, self.step, sample_rate=sr)
+        self.writer.add_audio("Last/Real", x_audio, self.step, sample_rate=sr)
+        self.writer.add_audio("Last/Fake", y_audio, self.step, sample_rate=sr)
 
-        eval_audio = torch.cat([x, y], -1).reshape(-1).detach().cpu().numpy()
-        sf.write(path.join(self.path, f"eval_{epoch:06d}.wav"), eval_audio, sr)
+        if self.mean_loss < self.best_loss:
+            self.writer.add_audio( f"Best/Real", x_audio, self.step, sample_rate=sr)
+            self.writer.add_audio( f"Best/Fake", y_audio, self.step, sample_rate=sr)
+
+            
+
