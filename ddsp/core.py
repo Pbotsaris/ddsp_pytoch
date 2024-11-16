@@ -150,8 +150,8 @@ def amp_to_impulse_response(amp, target_size):
     amp = torch.view_as_complex(amp)
     amp = fft.irfft(amp)
 
-    filter_size = amp.shape[-1]
 
+    filter_size = amp.shape[-1]
     amp = torch.roll(amp, filter_size // 2, -1)
     win = torch.hann_window(filter_size, dtype=amp.dtype, device=amp.device)
 

@@ -8,7 +8,6 @@ from tqdm import tqdm
 import numpy as np
 from os import makedirs, path
 import torch
-from scipy.io import wavfile
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 

@@ -22,3 +22,6 @@ model:
 train:
   scales: [4096, 2048, 1024, 512, 256, 128]
   overlap: .75
+  start_lr: 1e-3
+  stop_lr: 1e-5
+  decay_over: 10000
