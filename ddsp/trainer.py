@@ -32,8 +32,7 @@ class Trainer:
         self.epochs = int(np.ceil(args.STEPS / len(dataloader)))
         self.opt = torch.optim.Adam(model.parameters(), lr=args.LR)
 
-        total_steps = args.DECAY_OVER / len(dataloader)
-        gamma = (args.STOP_LR / args.LR) ** (1 / total_steps)
+        gamma = (args.STOP_LR / args.LR) ** (1 / args.DECAY_OVER)
         self.lr_scheduler = ExponentialLR(self.opt, gamma=gamma)
 
     def train(self) -> None:
@@ -52,6 +51,7 @@ class Trainer:
                 self.opt.zero_grad()
                 loss.backward()
                 self.opt.step()
+                self.lr_scheduler.step()
 
                 self.writer.add_scalar("loss", loss.item(), self.step)
 

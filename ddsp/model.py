@@ -63,6 +63,7 @@ class DDSP(nn.Module):
             self.in_mlps[0](pitch),
             self.in_mlps[1](loudness),
         ], -1)
+
         hidden = torch.cat([self.gru(hidden)[0], pitch, loudness], -1)
         hidden = self.out_mlp(hidden)
 
@@ -72,11 +73,7 @@ class DDSP(nn.Module):
         total_amp = param[..., :1]
         amplitudes = param[..., 1:]
 
-        amplitudes = remove_above_nyquist(
-            amplitudes,
-            pitch,
-            self.sampling_rate,
-        )
+        amplitudes = remove_above_nyquist(amplitudes, pitch, self.sampling_rate)
         amplitudes /= amplitudes.sum(-1, keepdim=True)
         amplitudes *= total_amp
 
