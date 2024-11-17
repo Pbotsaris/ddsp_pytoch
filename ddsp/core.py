@@ -5,11 +5,12 @@ import numpy as np
 import librosa as li
 import torchcrepe
 import math
+import scipy.signal as signal
 
 
 def safe_log(x, eps=1e-7):
 
-    if(type(x) == torch.Tensor):
+    if type(x) == torch.Tensor:
         return torch.log(x + eps)
 
     return np.log(x + eps)
@@ -98,6 +99,7 @@ def extract_loudness(signal, sampling_rate, block_size, n_fft=2048):
 
     return S
 
+
 def extract_pitch(signal, sampling_rate, block_size, n_fft=2048, device="cpu"):
     length = signal.shape[-1] // block_size
 
@@ -122,6 +124,7 @@ def extract_pitch(signal, sampling_rate, block_size, n_fft=2048, device="cpu"):
         )
 
     return f0
+
 
 def mlp(in_size, hidden_size, n_layers):
     channels = [in_size] + (n_layers) * [hidden_size]
@@ -150,7 +153,6 @@ def amp_to_impulse_response(amp, target_size):
     amp = torch.view_as_complex(amp)
     amp = fft.irfft(amp)
 
-
     filter_size = amp.shape[-1]
     amp = torch.roll(amp, filter_size // 2, -1)
     win = torch.hann_window(filter_size, dtype=amp.dtype, device=amp.device)
@@ -171,3 +173,19 @@ def fft_convolve(signal, kernel):
     output = output[..., output.shape[-1] // 2 :]
 
     return output
+
+
+def kaiser_filter(wc, atten, N=None):
+    n, width = signal.kaiserord(atten, wc / np.pi)
+    n = 2 * (n // 2) + 1
+
+    N = N if N is not None else n
+
+    return signal.firwin(
+        numtaps=N,
+        cutoff=wc,
+        window="kaiser",
+        width=width,
+        scale=False,
+        fs=2 * np.pi,
+    )
