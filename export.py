@@ -32,13 +32,16 @@ class ScriptDDSP(torch.nn.Module):
 
     def forward(self, pitch, loudness):
         loudness = (loudness - self.mean_loudness) / self.std_loudness
-        if self.realtime:
-            pitch = pitch[:, ::self.ddsp.block_size]
-            loudness = loudness[:, ::self.ddsp.block_size]
-            return self.ddsp.realtime_forward(pitch, loudness)
-        else:
-            return self.ddsp(pitch, loudness)
 
+        if self.realtime:
+            pitch = pitch[:, :: self.ddsp.block_size]
+            loudness = loudness[:, :: self.ddsp.block_size]
+            return self.ddsp.realtime_forward(pitch, loudness)
+
+        return self.ddsp(pitch, loudness)
+
+if args.RUN is None:
+    raise ValueError("Please provide a RUN directory")
 
 with open(path.join(args.RUN, "config.yaml"), "r") as config:
     config = yaml.safe_load(config)
@@ -58,23 +61,21 @@ scripted_model = torch.jit.script(
         config["data"]["mean_loudness"],
         config["data"]["std_loudness"],
         args.REALTIME,
-    ))
+    )
+)
+
 torch.jit.save(
     scripted_model,
     path.join(args.OUT_DIR, f"ddsp_{name}_pretrained.ts"),
 )
 
 impulse = ddsp.reverb.build_impulse().reshape(-1).numpy()
-sf.write(
-    path.join(args.OUT_DIR, f"ddsp_{name}_impulse.wav"),
-    impulse,
-    config["preprocess"]["sampling_rate"],
-)
+impulse_path = path.join(args.OUT_DIR, f"ddsp_{name}_impulse.wav")
+sf.write(impulse_path, impulse, config["preprocess"]["sampling_rate"])
 
-with open(
-        path.join(args.OUT_DIR, f"ddsp_{name}_config.yaml"),
-        "w",
-) as config_out:
+config_path = path.join(args.OUT_DIR, f"ddsp_{name}_config.yaml")
+
+with open(config_path, "w") as config_out:
     yaml.safe_dump(config, config_out)
 
 if args.DATA:
