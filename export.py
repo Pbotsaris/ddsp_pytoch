@@ -5,7 +5,7 @@ from os import path, makedirs, system
 from ddsp.model import DDSP
 import soundfile as sf
 from preprocess import get_files
-from ddsp.scripted_models import ScriptDDSP
+from ddsp.scripted_models import ScriptDDSP, ScriptNNTildeDDSP
 import traceback
 
 torch.set_grad_enabled(False)
@@ -17,8 +17,9 @@ class args(Config):
     REALTIME = False
     NN_TILDE = False
     DEBUG = False
+    INFERENCE_SR = None
 
-def load_model(args, config):
+def load_model(config, args):
     ddsp = DDSP(**config["model"])
 
     state = ddsp.state_dict()
@@ -29,15 +30,19 @@ def load_model(args, config):
 
     return ddsp, path.basename(path.normpath(args.RUN))
 
-def script_model(ddsp, config):
+def script_model(ddsp, config, args):
+
     if args.NN_TILDE:
-        raise NotImplementedError("NN-Tilde not supported in export")
+        return ScriptNNTildeDDSP(ddsp, config, args.INFERENCE_SR)
+
     else:
+        if args.INFERENCE_SR is not None:
+            print(f"Inference sampling rate only available for NN Tilde, ignoring {args.INFERENCE_SR}")
+
         return ScriptDDSP(ddsp, config, args.REALTIME)
 
-
-def export_model(ddsp, name, config):
-    scripted_model = torch.jit.script(script_model(ddsp, config))
+def export_model(ddsp, name, config, args):
+    scripted_model = torch.jit.script(script_model(ddsp, config, args))
     torch.jit.save( scripted_model, path.join(args.OUT_DIR, f"ddsp_{name}_pretrained.ts"))
     print(f"Exported model to {path.join(args.OUT_DIR, f'ddsp_{name}_pretrained.ts')}")
 
@@ -73,9 +78,9 @@ def main():
     with open(path.join(args.RUN, "config.yaml"), "r") as config:
         config = yaml.safe_load(config)
 
-    ddsp, name = load_model(args, config)
+    ddsp, name = load_model(config,args)
 
-    export_model(ddsp, name, config)
+    export_model(ddsp, name, config, args)
     export_config(name, config)
 
     if args.WITH_DATA:

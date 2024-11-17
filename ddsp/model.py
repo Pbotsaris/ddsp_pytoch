@@ -38,8 +38,8 @@ class Reverb(nn.Module):
 
 
 class DDSP(nn.Module):
-    def __init__(self, hidden_size, n_harmonic, n_bands, sampling_rate,
-                 block_size):
+    def __init__(self, hidden_size, n_harmonic, n_bands, sampling_rate, block_size):
+
         super().__init__()
         self.register_buffer("sampling_rate", torch.tensor(sampling_rate))
         self.register_buffer("block_size", torch.tensor(block_size))
