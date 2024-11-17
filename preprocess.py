@@ -1,13 +1,20 @@
 import yaml
+import traceback
 import pathlib
+from os import makedirs, path
+
 import librosa as li
-from ddsp.core import extract_loudness, extract_pitch
-from effortless_config import Config
 import numpy as np
 from tqdm import tqdm
 import numpy as np
-from os import makedirs, path
 import torch
+from effortless_config import Config
+
+from ddsp.core import extract_loudness, extract_pitch
+
+class args(Config):
+    CONFIG = "config.yaml"
+    DEBUG = False
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -16,6 +23,7 @@ def get_files(data_location, extension, **kwargs):
         raise FileNotFoundError(f"Failed to preprocess: {data_location} not found.")
 
     return list(pathlib.Path(data_location).rglob(f"*.{extension}"))
+
 
 def preprocess(f, sampling_rate, block_size, signal_length, n_fft, oneshot, **kwargs):
     x, _ = li.load(f, sr=sampling_rate)
@@ -29,35 +37,14 @@ def preprocess(f, sampling_rate, block_size, signal_length, n_fft, oneshot, **kw
     loudness = extract_loudness(x, sampling_rate, block_size, n_fft)
 
     x = x.reshape(-1, signal_length)
-    pitch = pitch.reshape(x.shape[0], -1) # type: ignore
+    pitch = pitch.reshape(x.shape[0], -1)  # type: ignore
     loudness = loudness.reshape(x.shape[0], -1)
 
     print("shape of x:", x.shape)
 
     return x, pitch, loudness
 
-
-class Dataset(torch.utils.data.Dataset):
-    def __init__(self, out_dir):
-        super().__init__()
-        self.signals = np.load(path.join(out_dir, "signals.npy"))
-        self.pitchs = np.load(path.join(out_dir, "pitchs.npy"))
-        self.loudness = np.load(path.join(out_dir, "loudness.npy"))
-
-    def __len__(self):
-        return self.signals.shape[0]
-
-    def __getitem__(self, idx):
-        s = torch.from_numpy(self.signals[idx])
-        p = torch.from_numpy(self.pitchs[idx])
-        l = torch.from_numpy(self.loudness[idx])
-        return s, p, l
-
-
 def main():
-    class args(Config):
-        CONFIG = "config.yaml"
-
     args.parse_args()
 
     with open(args.CONFIG, "r") as config:
@@ -90,7 +77,9 @@ def main():
 
 
 if __name__ == "__main__":
-    #try:
-      main()
-   # except Exception as e:
-    #    print(e)
+    try:
+        main()
+    except Exception as e:
+        print(f"Something went wrong: {e}")
+        if args.DEBUG:
+            traceback.print_exc()

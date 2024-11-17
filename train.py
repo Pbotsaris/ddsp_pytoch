@@ -1,10 +1,12 @@
 import torch
+import traceback
 import yaml
-from ddsp.model import DDSP
 from effortless_config import Config
 from os import path
 import os
-from preprocess import Dataset
+
+from ddsp.model import DDSP
+from ddsp.dataset import Dataset
 from ddsp.core import  mean_std_loudness
 from ddsp.trainer import Trainer
 from ddsp.utils import verify_adjust_stop_lr, print_params
@@ -18,7 +20,7 @@ class args(Config):
     LR = 1e-3
     STOP_LR = 1e-4
     DECAY_OVER = 400000
-
+    DEBUG = False
 
 def main():
     args.parse_args()
@@ -49,5 +51,10 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:
+        print(f"Something went wrong: {e}")
+        if args.DEBUG:  
+             traceback.print_exc()  
 
